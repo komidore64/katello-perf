@@ -40,6 +40,11 @@ if [ -z ${PORTAL_PASS+x} ]; then
 	read -sr PORTAL_PASS
 fi
 
+if ! which openstack &>/dev/null; then
+	echo "please install 'python-openstackclient'"
+	exit 1
+fi
+
 openstack server create ${SERVER_NAME} \
 	--flavor c3.mxlarge \
 	--image _OS1_rhel-guest-image-7.2-20151102.0.x86_64.qcow2 \
@@ -54,6 +59,11 @@ readonly SERVER_ADDRESS="$( openstack server show ${SERVER_NAME} --format shell 
 )"
 
 [ -z "${SERVER_ADDRESS}" ] && exit 1 # bail if we don't get the IP address
+
+if ! which nmap &>/dev/null; then
+	echo "please install 'nmap'"
+	exit 1
+fi
 
 SSH_UP=1
 while [ ${SSH_UP} -gt 0 ]; do
