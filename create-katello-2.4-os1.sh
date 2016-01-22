@@ -18,7 +18,7 @@
 set -x
 set -e
 
-readonly SERVER_NAME="${OS_USERNAME}-katello2.4-perf"
+readonly SERVER_NAME="${OS_USERNAME}-katello24-perf"
 
 # source them-there OS env variables
 if ! env | grep ^OS &>/dev/null; then
