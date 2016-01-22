@@ -70,6 +70,7 @@ while [ ${SSH_UP} -gt 0 ]; do
 	if nmap -p22 ${SERVER_ADDRESS} -oG - | grep -q 22/open; then
 		SSH_UP=0
 	fi
+	sleep 1
 done
 
 ssh-keyscan -H ${SERVER_ADDRESS} >> ~/.ssh/known_hosts
