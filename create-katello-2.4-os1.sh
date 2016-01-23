@@ -45,18 +45,20 @@ if ! which openstack &>/dev/null; then
 	exit 1
 fi
 
-openstack server create ${SERVER_NAME} \
-	--flavor c3.mxlarge \
+SERVER_UUID="$( openstack server create ${SERVER_NAME} \
+	--flavor c3.xlarge \
 	--image _OS1_rhel-guest-image-7.2-20151102.0.x86_64.qcow2 \
 	--key-name ${OPENSTACK_KEY_NAME} \
 	--security-group default \
-	--wait
+	--wait | \
+	grep '\<id\>' | \
+	cut -d '|' -f3 | \
+	tr -d ' ' )"
 
-readonly SERVER_ADDRESS="$( openstack server show ${SERVER_NAME} --format shell --column addresses \
+readonly SERVER_ADDRESS="$( openstack server show ${SERVER_UUID} --format shell --column addresses \
 	| sed 's/.*"\(.*\)".*/\1/' \
 	| cut -d= -f2 \
-	| cut -d' ' -f 2 \
-)"
+	| cut -d' ' -f 2 )"
 
 [ -z "${SERVER_ADDRESS}" ] && exit 1 # bail if we don't get the IP address
 
