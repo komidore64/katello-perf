@@ -1,0 +1,3 @@
+17a18,19
+>       # timeout is roughly "wait" * "tries" from above
+>       timeout =>  800,

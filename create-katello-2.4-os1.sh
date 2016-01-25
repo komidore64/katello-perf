@@ -77,6 +77,7 @@ done
 
 ssh-keyscan -H ${SERVER_ADDRESS} >> ~/.ssh/known_hosts
 
+
 ssh -t cloud-user@${SERVER_ADDRESS} sudo subscription-manager register \
 	--username ${PORTAL_USERNAME} \
 	--password ${PORTAL_PASS} \
@@ -87,6 +88,10 @@ ssh -t cloud-user@${SERVER_ADDRESS} sudo sed -i \'s/enabled = 1/enabled = 0/\' /
 ssh -t cloud-user@${SERVER_ADDRESS} sudo yum-config-manager \
 	--enable rhel-7-server-rpms \
 	--save
+
+# for 2.4, apply this installer patch. See https://github.com/Katello/puppet-candlepin/pull/36/
+scp foreman-redmine-13361.patch cloud-user@${SERVER_ADDRESS}:
+ssh -t cloud-user@${SERVER_ADDRESS} "sudo yum install -y patch; sudo patch /usr/share/katello-installer/modules/candlepin/manifests/service.pp < foreman-redmine-13361.patch"
 
 # install katello 2.4 yall
 ssh -tt cloud-user@${SERVER_ADDRESS} <<-END_OF_SHELL
