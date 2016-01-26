@@ -8,6 +8,7 @@
 # - OPENSTACK_KEY_NAME
 # - PORTAL_USERNAME
 # - PORTAL_PASS
+# - KT_VERSION
 #
 # ##############################
 # # openstack-env.sh
@@ -18,7 +19,7 @@
 set -x
 set -e
 
-readonly SERVER_NAME="${OS_USERNAME}-katello24-perf"
+readonly SERVER_NAME="${OS_USERNAME}-katello-perf"
 
 # source them-there OS env variables
 if ! env | grep ^OS &>/dev/null; then
@@ -38,6 +39,13 @@ fi
 if [ -z ${PORTAL_PASS+x} ]; then
 	echo "enter your redhat portal password"
 	read -sr PORTAL_PASS
+fi
+
+
+# a little strange, it is needed to work around a bug in setup.rb
+read -p "install katello 2.4? (y/n)" answer
+if [ "$answer" == "y" ]; then KT_VERSION='--version 2.4'
+else KT_VERSION=''
 fi
 
 if ! which openstack &>/dev/null; then
@@ -91,7 +99,6 @@ ssh -t cloud-user@${SERVER_ADDRESS} sudo yum-config-manager \
 
 # for 2.4, apply this installer patch. See https://github.com/Katello/puppet-candlepin/pull/36/
 scp foreman-redmine-13361.patch cloud-user@${SERVER_ADDRESS}:
-ssh -t cloud-user@${SERVER_ADDRESS} "sudo yum install -y patch; sudo patch /usr/share/katello-installer/modules/candlepin/manifests/service.pp < foreman-redmine-13361.patch"
 
 # install katello 2.4 yall
 ssh -tt cloud-user@${SERVER_ADDRESS} <<-END_OF_SHELL
@@ -100,7 +107,9 @@ ssh -tt cloud-user@${SERVER_ADDRESS} <<-END_OF_SHELL
 		yum install -y git ruby
 		git clone https://github.com/katello/katello-deploy.git
 		cd katello-deploy
-		./setup.rb --version 2.4
+		./setup.rb ${KT_VERSION} --skip-installer
+		yum install -y patch; patch /usr/share/katello-installer/modules/candlepin/manifests/service.pp < /home/cloud-user/foreman-redmine-13361.patch
+		./setup.rb ${KT_VERSION}
 		exit
 	END_OF_ROOT
 	exit
