@@ -85,6 +85,28 @@ done
 
 ssh-keyscan -H ${SERVER_ADDRESS} >> ~/.ssh/known_hosts
 
+ssh -tt cloud-user@${SERVER_ADDRESS} <<-END_OF_SHELL
+	sudo su -l <<-END_OF_ROOT
+		fdisk /dev/vdb <<-END_OF_FDISK
+			o
+			n
+			p
+
+
+
+			p
+			w
+		END_OF_FDISK
+
+		mkfs.xfs /dev/vdb1
+		mkdir -p /var/lib/pulp
+		mount /dev/vdb1 /var/lib/pulp
+
+		sed -i -e 's/vdb/vdb1/' -e 's/\/mnt/\/var\/lib\/pulp/' /etc/fstab
+		exit
+	END_OF_ROOT
+	exit
+END_OF_SHELL
 
 ssh -t cloud-user@${SERVER_ADDRESS} sudo subscription-manager register \
 	--username ${PORTAL_USERNAME} \
