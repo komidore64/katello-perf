@@ -43,7 +43,7 @@ fi
 
 
 # a little strange, it is needed to work around a bug in setup.rb
-read -p "install katello 2.4? (y/n)" answer
+read -p "install katello 2.4? (y/n) " answer
 if [ "$answer" == "y" ]; then KT_VERSION='--version 2.4'
 else KT_VERSION=''
 fi
@@ -132,6 +132,15 @@ ssh -tt cloud-user@${SERVER_ADDRESS} <<-END_OF_SHELL
 		./setup.rb ${KT_VERSION} --skip-installer
 		yum install -y patch; patch /usr/share/katello-installer/modules/candlepin/manifests/service.pp < /home/cloud-user/foreman-redmine-13361.patch
 		./setup.rb ${KT_VERSION}
+
+		yum install -y tfm-rubygem-hammer_cli_csv
+
+		# brace yourself, hack is coming
+		# TODO: this part doesn't work yet :(
+		# sed -i '/gettext/d' $( rpm -ql tfm-rubygem-hammer_cli_csv | grep gemspec )
+
+		# katello admin password
+		ruby -rpsych -e "p Psych.load_file('/etc/katello-installer/answers.katello-installer.yaml')['foreman']['admin_password']" | tr -d '"' > \$HOME/admin_password
 		exit
 	END_OF_ROOT
 	exit
