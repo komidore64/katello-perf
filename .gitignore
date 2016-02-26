@@ -1,2 +1,5 @@
 openstack-env.sh
 katello-perf.log
+.ruby-version
+.ruby-gemset
+hammer-cfg
