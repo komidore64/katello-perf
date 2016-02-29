@@ -5,6 +5,7 @@ set -x
 set -e
 
 readonly perfhammer="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+readonly pubdir="/var/www/html/pub"
 
 function setup-hammer-configs {
 	local module
@@ -52,7 +53,7 @@ function verbosity {
 }
 
 function perfhammer {
-	hammer $( verbosity ) --username ${username} --password ${password} --server ${server} --config ${perfhammer}/hammer-cfg $@
+	hammer $( verbosity ) --username ${username} --password ${katello_password} --server https://${server} --config ${perfhammer}/hammer-cfg $@
 }
 
 function organizations {
@@ -99,6 +100,51 @@ function products {
 	done
 }
 
+function prepare-repos {
+	local i
+	local name
+	local repo_name
+
+	for i in $( seq 1 ${repos_per_product} ); do
+		name="perf-repo-${i}"
+		repo_names+=("${name}")
+		repo_urls+=("http://${server}/pub/fakerepos/${name}/")
+	done
+
+	ssh root@${server} <<-END_ROOT_SSH
+		mkdir -p ${pubdir}/fakerepos
+		cd
+		wget https://inecas.fedorapeople.org/fakerepos/zoo3.tar.gz
+		tar xvzf zoo3.tar.gz
+		for i in "${repo_names[*]}"; do
+			mkdir -p ${pubdir}/fakerepos/\${i}
+			cp -r zoo3/* ${pubdir}/fakerepos/\${i}/
+		done
+		exit
+	END_ROOT_SSH
+}
+
+function repos {
+	local product
+	local i
+	local name
+	local url
+
+	for product in "${product_names[*]}"; do
+		for i in $( seq 0 $(( ${#repo_names[*]} - 1 )) ); do
+			name="${repo_names[${i}]}"
+			url="${repo_urls[${i}]}"
+			perfhammer repository create \
+				--name ${name} \
+				--product ${product} \
+				--url ${url} \
+				--organization ${organization_names[0]} \
+				--content-type yum \
+				--publish-via-http true
+		done
+	done
+}
+
 function main {
 	organization_count=${organization_count:-100}
 	organization_names=()
@@ -111,12 +157,14 @@ function main {
 	host_count=${host_count:-1000}
 	host_names=()
 	repos_per_product=${repos_per_product:-10}
+	repo_names=()
+	repo_urls=()
 	username=${username:-admin}
 	verbose=${verbose:-false}
 
-	[ -z ${password+x} ] && read -r -p "password: " password
+	[ -z ${katello_password+x} ] && read -r -p "katello password: " katello_password
 
-	[ -z ${server+x} ] && read -r -p "server: " server
+	[ -z ${server+x} ] && read -r -p "katello server url: " server
 
 	setup-hammer-configs
 	ensure-rvm-gemset
@@ -124,6 +172,8 @@ function main {
 	lifecycle-environments
 	content-views
 	products
+	prepare-repos
+	repos
 }
 
 main
