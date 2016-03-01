@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 # vim: noet
 
+# This script requires less interaction while running if you've added your
+# public key to the server for ssh authentication during a couple calls made.
+
+# Defaults for objects created during this population run are listed below in
+# the `main` function. Any of these can be overridden by passing an environment
+# variable to this script.
+
+# $ organization_count=10 katello_password=abcd12345678 server=stupid-slow.katello.com ./perfhammer.sh
+
 set -x
 set -e
 
@@ -30,6 +39,19 @@ function setup-hammer-configs {
 			  :enable_module: true
 		END_MODULE_CONFIG
 	done
+}
+
+function ensure-ssh-connectivity {
+	local known_hosts
+	local shost
+	local i
+
+	shost="$( ssh-keyscan -H ${server} )"
+	mapfile -t known_hosts < ~/.ssh/known_hosts
+	for i in $( seq 0 $(( ${known_hosts[*]} - 1 )) ); do
+		[ "${shost}" = "${known_hosts[${i}]}" ] && return
+	done
+	echo ${shost} > ~/.ssh/known_hosts
 }
 
 function ensure-rvm-gemset {
@@ -130,7 +152,7 @@ function repos {
 	local name
 	local url
 
-	for product in "${product_names[*]}"; do
+	for product in ${product_names[*]}; do
 		for i in $( seq 0 $(( ${#repo_names[*]} - 1 )) ); do
 			name="${repo_names[${i}]}"
 			url="${repo_urls[${i}]}"
@@ -145,28 +167,32 @@ function repos {
 	done
 }
 
+function hosts {
+	: # TODO
+}
+
 function main {
+	username=${username:-admin}
+	[ -z ${katello_password+x} ] && read -r -p "katello password: " katello_password
+	[ -z ${server+x} ] && read -r -p "katello server url: " server
+	verbose=${verbose:-false}
+
 	organization_count=${organization_count:-100}
 	organization_names=()
 	lifecycle_environment_count=${lifecycle_environment_count:-100}
 	lifecycle_environment_names=()
-	product_count=${product_count:-100}
-	product_names=()
 	content_view_count=${content_view_count:-100}
 	content_view_names=()
-	host_count=${host_count:-1000}
-	host_names=()
+	product_count=${product_count:-100}
+	product_names=()
 	repos_per_product=${repos_per_product:-10}
 	repo_names=()
 	repo_urls=()
-	username=${username:-admin}
-	verbose=${verbose:-false}
-
-	[ -z ${katello_password+x} ] && read -r -p "katello password: " katello_password
-
-	[ -z ${server+x} ] && read -r -p "katello server url: " server
+	host_count=${host_count:-1000}
+	host_names=()
 
 	setup-hammer-configs
+	ensure-ssh-connectivity
 	ensure-rvm-gemset
 	organizations
 	lifecycle-environments
@@ -174,6 +200,7 @@ function main {
 	products
 	prepare-repos
 	repos
+	hosts
 }
 
 main
