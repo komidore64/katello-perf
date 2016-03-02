@@ -8,13 +8,25 @@
 # the `main` function. Any of these can be overridden by passing an environment
 # variable to this script.
 
-# $ organization_count=10 katello_password=abcd12345678 server=stupid-slow.katello.com ./perfhammer.sh
+# $ organization_count=10 password=abcd12345678 server=stupid-slow.katello.com ./perfhammer.sh
 
-set -x
-set -e
 
-readonly perfhammer="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-readonly pubdir="/var/www/html/pub"
+function scale {
+	local percentage=$1
+	local default_value=$2
+
+	echo "${percentage} * ${default_value} / 100" | bc
+}
+
+function counts {
+	local index
+	local var_name
+
+	for index in ${!defaults[*]}; do
+		var_name="${index}_count"
+		[ -z ${!var_name+x} ] && declare ${var_name}=$( scale ${scale} ${defaults[${index}]} )
+	done
+}
 
 function setup-hammer-configs {
 	local module
@@ -70,12 +82,12 @@ function ensure-rvm-gemset {
 
 function verbosity {
 	local addl_opts=""
-	[ ${verbose} == "true" ] && addl_opts="-v -d"
+	[ ${verbose} == "true" ] && addl_opts="--verbose --debug"
 	echo ${addl_opts}
 }
 
 function perfhammer {
-	hammer $( verbosity ) --username ${username} --password ${katello_password} --server https://${server} --config ${perfhammer}/hammer-cfg $@
+	hammer $( verbosity ) --username ${username} --password ${password} --server https://${server} --config ${perfhammer}/hammer-cfg $@
 }
 
 function organizations {
@@ -127,7 +139,7 @@ function prepare-repos {
 	local name
 	local repo_name
 
-	for i in $( seq 1 ${repos_per_product} ); do
+	for i in $( seq 1 ${repo_count} ); do
 		name="perf-repo-${i}"
 		repo_names+=("${name}")
 		repo_urls+=("http://${server}/pub/fakerepos/${name}/")
@@ -138,7 +150,7 @@ function prepare-repos {
 		cd
 		wget https://inecas.fedorapeople.org/fakerepos/zoo3.tar.gz
 		tar xvzf zoo3.tar.gz
-		for i in "${repo_names[*]}"; do
+		for i in ${repo_names[*]}; do
 			mkdir -p ${pubdir}/fakerepos/\${i}
 			cp -r zoo3/* ${pubdir}/fakerepos/\${i}/
 		done
@@ -167,40 +179,66 @@ function repos {
 	done
 }
 
-function hosts {
-	: # TODO
+function sync-repos {
+	local product
+	local i
+	local repo_name
+
+	for product in ${product_names[*]}; do
+		for i in $( seq 0 $(( ${#repo_names[*]} - 1 )) ); do
+			repo_name="${repo_names[${i}]}"
+			perfhammer repository synchronize \
+				--organization ${organization_names[0]} \
+				--product ${product} \
+				--name ${repo_name}
+		done
+	done
 }
 
 function main {
+	set -x
+	set -e
+
+	readonly perfhammer="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+	readonly pubdir="/var/www/html/pub"
+
+	# -A for "associative array"
+	readonly -A defaults=(
+		[organization]=100
+		[lifecycle_environment]=100
+		[content_view]=100
+		[product]=100
+		[repo]=100
+		[host]=1000
+	)
+
+	# Scale defaults to 100, as in 100%.
+	scale=${scale:-100}
+
 	username=${username:-admin}
-	[ -z ${katello_password+x} ] && read -r -p "katello password: " katello_password
+	[ -z ${password+x} ] && read -r -p "katello password: " password
 	[ -z ${server+x} ] && read -r -p "katello server url: " server
 	verbose=${verbose:-false}
 
-	organization_count=${organization_count:-100}
 	organization_names=()
-	lifecycle_environment_count=${lifecycle_environment_count:-100}
 	lifecycle_environment_names=()
-	content_view_count=${content_view_count:-100}
 	content_view_names=()
-	product_count=${product_count:-100}
 	product_names=()
-	repos_per_product=${repos_per_product:-10}
 	repo_names=()
 	repo_urls=()
-	host_count=${host_count:-1000}
 	host_names=()
 
 	setup-hammer-configs
 	ensure-ssh-connectivity
 	ensure-rvm-gemset
+	counts
 	organizations
 	lifecycle-environments
 	content-views
 	products
 	prepare-repos
 	repos
-	hosts
+	sync-repos
 }
 
 main
