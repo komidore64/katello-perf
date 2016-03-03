@@ -315,6 +315,35 @@ function sync-repos {
 	done
 }
 
+# publish-content-views()
+#
+# Adds all products to each content view then publishes a new contenv view
+# version for each on the Katello 2.4 server specified in ${server}.
+#
+# no arguments
+#
+function publish-content-views {
+	local view
+	local product
+	local repo
+
+	for view in ${content_view_names[*]}; do
+		for product in ${product_names[*]}; do
+			for repo in ${repo_names[*]}; do
+				perfhammer content-view add-repository \
+					--organization ${organization_names[0]} \
+					--product ${product} \
+					--repository ${repo} \
+					--name ${view}
+			done
+		done
+
+		perfhammer content-view publish \
+			--organization ${organization_names[0]} \
+			--name ${view}
+	done
+}
+
 # main()
 #
 # This is the main function that prepares the environment for perfhammer.sh's
@@ -330,10 +359,10 @@ function main {
 	readonly pubdir="/var/www/html/pub"
 
 	readonly -A defaults=(
-		[organization]=100
-		[lifecycle_environment]=100
-		[content_view]=100
-		[product]=100
+		[organization]=10
+		[lifecycle_environment]=10
+		[content_view]=10
+		[product]=10
 		[repo]=10
 		[host]=1000
 	)
@@ -365,6 +394,7 @@ function main {
 	prepare-repos
 	repos
 	sync-repos
+	publish-content-views
 }
 
 # big green "GO" button!
