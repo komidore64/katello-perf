@@ -10,7 +10,7 @@
 # Scale the given value by a percentage. For example, "Give me 20% of 100" would
 # be ``scale 100 20``.
 #
-# value - The integer to be scaled.
+# value   - The integer to be scaled.
 # percent - An integer representative of the percent you wish to scale
 #           ``value`` by. This value should be greater than zero.
 #
@@ -19,6 +19,29 @@ function scale {
 	local percent=$2
 
 	echo "${percent} * ${value} / 100" | bc
+}
+
+# benchmark( *command_line )
+#
+# Records the amount of time it takes for ``*command_line`` to complete. This
+# uses GNU time rather than Bash's built-in time command.
+#
+# *command_line - Command line string to be executed in Bash.
+#
+function benchmark {
+	local command_line=$@
+	local file="${recordsdir}/${record_file:-perfhammer}.csv"
+
+	if [ ! -w "${file}" ]; then
+		mkdir -p "${recordsdir}"
+		echo "usermode,kernelmode,elapsedtime,cpu%,command" > "${file}"
+	fi
+
+	/usr/bin/time \
+		--output ${file} \
+		--append \
+		--format "%U,%S,%E,%P,%C" \
+		${command_line}
 }
 
 # counts()
@@ -35,7 +58,7 @@ function counts {
 
 	for index in ${!defaults[*]}; do
 		var_name="${index}_count"
-		[ -z ${!var_name+x} ] && declare -g ${var_name}=$( scale ${defaults[${index}]} ${scale} )
+		if [ -z ${!var_name+x} ]; then declare -g ${var_name}=$( scale ${defaults[${index}]} ${scale} ); fi
 	done
 }
 
@@ -50,22 +73,22 @@ function counts {
 function setup-hammer-configs {
 	local module
 
-	[ -d ${perfhammer}/hammer-cfg ] && return # skip this if the configs are already set up
+	if [ -d ${perfhammerdir}/hammer-cfg ]; then return; fi # skip this if the configs are already set up
 
-	mkdir -p ${perfhammer}/hammer-cfg/cli.modules.d
-	cat > ${perfhammer}/hammer-cfg/cli_config.yml <<-END_CLI_CONFIG_YML
+	mkdir -p ${perfhammerdir}/hammer-cfg/cli.modules.d
+	cat > ${perfhammerdir}/hammer-cfg/cli_config.yml <<-END_CLI_CONFIG_YML
 		:ui:
 		  :interactive: true
 		  :per_page: 9999
-		  :history_file: '${perfhammer}/hammer-cfg/history'
+		  :history_file: '${perfhammerdir}/hammer-cfg/history'
 		:watch_plain: false
 		:reload_cache: true
-		:log_dir: '${perfhammer}/hammer-cfg/log'
+		:log_dir: '${perfhammerdir}/hammer-cfg/log'
 		:log_level: 'debug'
 	END_CLI_CONFIG_YML
 
 	for module in foreman foreman_bootdisk foreman_docker foreman_tasks katello; do
-		cat > ${perfhammer}/hammer-cfg/cli.modules.d/${module}.yml <<-END_MODULE_CONFIG
+		cat > ${perfhammerdir}/hammer-cfg/cli.modules.d/${module}.yml <<-END_MODULE_CONFIG
 			:${module}:
 			  :enable_module: true
 		END_MODULE_CONFIG
@@ -89,7 +112,7 @@ function ensure-ssh-connectivity {
 	shost="$( ssh-keyscan -H ${server} )"
 	mapfile -t known_hosts < ~/.ssh/known_hosts
 	for i in $( seq 0 $(( ${known_hosts[*]} - 1 )) ); do
-		[ "${shost}" = "${known_hosts[${i}]}" ] && return
+		if [ "${shost}" = "${known_hosts[${i}]}" ]; then return; fi
 	done
 	echo ${shost} > ~/.ssh/known_hosts
 }
@@ -116,6 +139,29 @@ function ensure-rvm-gemset {
 	fi
 }
 
+# ensure-packages-installed()
+#
+# Make sure that bc and GNU time are installed before running perfhammer.sh.
+#
+# no arguments
+#
+function ensure-packages-installed {
+	local -a packages=(
+		bc
+		time
+	)
+	local pkg
+	local barf=false
+
+	for pkg in ${packages[*]}; do
+		if ! which ${pkg} &>/dev/null; then
+			echo "${pkg} is needed for perfhammer.sh to run."
+			barf=true
+		fi
+	done
+	if [ "${barf}" = "true" ]; then exit 1; fi
+}
+
 # verbosity()
 #
 # Outputs the proper verbose and debug flags for Hammer CLI to consume if the
@@ -125,7 +171,7 @@ function ensure-rvm-gemset {
 #
 function verbosity {
 	local addl_opts=""
-	[ ${verbose} == "true" ] && addl_opts="--verbose --debug"
+	if [ ${verbose} == "true" ]; then addl_opts="--verbose --debug"; fi
 	echo ${addl_opts}
 }
 
@@ -141,11 +187,12 @@ function verbosity {
 function perfhammer {
 	local hammer_args=$@
 
-	hammer $( verbosity ) \
+	benchmark \
+		hammer $( verbosity ) \
 		--username ${username} \
 		--password ${password} \
 		--server https://${server} \
-		--config ${perfhammer}/hammer-cfg \
+		--config ${perfhammerdir}/hammer-cfg \
 		${hammer_args}
 }
 
@@ -161,11 +208,17 @@ function organizations {
 	local i
 	local name
 
+	declare -g record_file="organization_create"
+
 	for i in $( seq 1 ${organization_count} ); do
 		name="perf-org-${i}"
 		organization_names+=("${name}")
-		perfhammer organization create --name ${name}
+		perfhammer \
+			organization create \
+			--name ${name}
 	done
+
+	unset record_file
 }
 
 # lifecycle-environments()
@@ -180,14 +233,19 @@ function lifecycle-environments {
 	local i
 	local name
 
+	declare -g record_file="lifecycle_environment_create"
+
 	for i in $( seq 1 ${lifecycle_environment_count} ); do
 		name="perf-lifecycle-env-${i}"
 		lifecycle_environment_names+=("${name}")
-		perfhammer lifecycle-environment create \
+		perfhammer \
+			lifecycle-environment create \
 			--organization ${organization_names[0]} \
 			--name ${name} \
 			--prior Library
 	done
+
+	unset record_file
 }
 
 # content-views()
@@ -202,13 +260,18 @@ function content-views {
 	local i
 	local name
 
+	declare -g record_file="content_view_create"
+
 	for i in $( seq 1 ${content_view_count} ); do
 		name="perf-content-view-${i}"
 		content_view_names+=("${name}")
-		perfhammer content-view create \
+		perfhammer \
+			content-view create \
 			--organization ${organization_names[0]} \
 			--name ${name}
 	done
+
+	unset record_file
 }
 
 # products()
@@ -223,13 +286,18 @@ function products {
 	local i
 	local name
 
+	declare -g record_file="product_create"
+
 	for i in $( seq 1 ${product_count} ); do
 		name="perf-product-${i}"
 		product_names+=("${name}")
-		perfhammer product create \
+		perfhammer \
+			product create \
 			--organization ${organization_names[0]} \
 			--name ${name}
 	done
+
+	unset record_file
 }
 
 # prepare-repos()
@@ -277,11 +345,14 @@ function repos {
 	local name
 	local url
 
+	declare -g record_file="repo_create"
+
 	for product in ${product_names[*]}; do
 		for i in $( seq 0 $(( ${#repo_names[*]} - 1 )) ); do
 			name="${repo_names[${i}]}"
 			url="${repo_urls[${i}]}"
-			perfhammer repository create \
+			perfhammer \
+				repository create \
 				--organization ${organization_names[0]} \
 				--product ${product} \
 				--name ${name} \
@@ -290,6 +361,8 @@ function repos {
 				--publish-via-http true
 		done
 	done
+
+	unset record_file
 }
 
 # sync-repos()
@@ -304,15 +377,20 @@ function sync-repos {
 	local i
 	local repo_name
 
+	declare -g record_file="repo_sync"
+
 	for product in ${product_names[*]}; do
 		for i in $( seq 0 $(( ${#repo_names[*]} - 1 )) ); do
 			repo_name="${repo_names[${i}]}"
-			perfhammer repository synchronize \
+			perfhammer \
+				repository synchronize \
 				--organization ${organization_names[0]} \
 				--product ${product} \
 				--name ${repo_name}
 		done
 	done
+
+	unset record_file
 }
 
 # publish-content-views()
@@ -330,7 +408,9 @@ function publish-content-views {
 	for view in ${content_view_names[*]}; do
 		for product in ${product_names[*]}; do
 			for repo in ${repo_names[*]}; do
-				perfhammer content-view add-repository \
+				declare -g record_file="content_view_add_repository"
+				perfhammer \
+					content-view add-repository \
 					--organization ${organization_names[0]} \
 					--product ${product} \
 					--repository ${repo} \
@@ -338,10 +418,42 @@ function publish-content-views {
 			done
 		done
 
-		perfhammer content-view publish \
+		declare -g record_file="content_view_publish"
+		perfhammer \
+			content-view publish \
 			--organization ${organization_names[0]} \
 			--name ${view}
 	done
+
+	unset record_file
+}
+
+# hosts()
+#
+# Creates ${host_count} number of content hosts on the Katello 2.4 server
+# specified in ${server}. This stores the names of the content hosts in
+# ${host_names}.
+#
+# no arguments
+#
+function hosts {
+	local i
+	local name
+
+	declare -g record_file="host_create"
+
+	for i in $( seq 1 ${host_count} ); do
+		name="perf-host-${i}"
+		host_names+=("${name}")
+		perfhammer \
+			content-host create \
+			--organization ${organization_names[0]} \
+			--content-view ${content_view_names[0]} \
+			--name ${name} \
+		# is this right?!
+	done
+
+	unset record_file
 }
 
 # main()
@@ -355,8 +467,9 @@ function main {
 	set -x
 	set -e
 
-	readonly perfhammer="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+	readonly perfhammerdir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 	readonly pubdir="/var/www/html/pub"
+	readonly recordsdir="${perfhammerdir}/records/$( date +%F_%T )"
 
 	readonly -A defaults=(
 		[organization]=10
@@ -372,8 +485,8 @@ function main {
 	scale=${scale:-100}
 	username=${username:-admin}
 	verbose=${verbose:-false}
-	[ -z ${password+x} ] && read -r -p "katello password: " password
-	[ -z ${server+x} ] && read -r -p "katello server url: " server
+	if [ -z ${password+x} ]; then read -r -p "katello password: " password; fi
+	if [ -z ${server+x} ]; then read -r -p "katello server url: " server; fi
 
 	declare -g organization_names=()
 	declare -g lifecycle_environment_names=()
@@ -386,6 +499,7 @@ function main {
 	setup-hammer-configs
 	ensure-ssh-connectivity
 	ensure-rvm-gemset
+	ensure-packages-installed
 	counts
 	organizations
 	lifecycle-environments
@@ -395,6 +509,7 @@ function main {
 	repos
 	sync-repos
 	publish-content-views
+	hosts
 }
 
 # big green "GO" button!
