@@ -485,8 +485,8 @@ function main {
 	scale=${scale:-100}
 	username=${username:-admin}
 	verbose=${verbose:-false}
+	if [ -z ${server+x} ]; then read -r -p "katello server hostname: " server; fi
 	if [ -z ${password+x} ]; then read -r -p "katello password: " password; fi
-	if [ -z ${server+x} ]; then read -r -p "katello server url: " server; fi
 
 	declare -g organization_names=()
 	declare -g lifecycle_environment_names=()
