@@ -17,7 +17,7 @@ umount /home
 lvremove --force /dev/mapper/*home
 sed -i '/home/d' /etc/fstab
 lvresize --force --extents +100%FREE /dev/mapper/*root
-resize2fs -f /dev/mapper/*root
+xfs_growfs / && mount / -o inode64,remount
 tar xvzf $HOME/home.tgz --directory /
 
 # install katello 2.4
