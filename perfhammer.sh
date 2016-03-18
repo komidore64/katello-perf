@@ -2,7 +2,7 @@
 # vim: noet
 
 # $ ./perfhammer.sh # will prompt you for server's hostname and katello admin password
-# $ server=katello24.server.example.com password=super-secret-unguessable-password ./perfhammer.sh
+# $ server=katello24.server.example.com password=super-secret-password ./perfhammer.sh 2>&1 | tee katello-perf.log
 
 
 # scale( value, percent )
@@ -34,13 +34,14 @@ function benchmark {
 
 	if [ ! -w "${file}" ]; then
 		mkdir -p "${recordsdir}"
-		echo "usermode,kernelmode,elapsedtime,cpu%,command" > "${file}"
+		echo "elapsedtime [HH:]MM:SS,command" > "${file}"
 	fi
 
 	/usr/bin/time \
 		--output ${file} \
 		--append \
-		--format "%U,%S,%E,%P,%C" \
+		--format "%E,%C" \
+		-- \
 		${command_line}
 }
 
@@ -109,9 +110,9 @@ function ensure-ssh-connectivity {
 	local shost
 	local i
 
-	shost="$( ssh-keyscan -H ${server} )"
+	shost="$( ssh-keyscan ${server} )"
 	mapfile -t known_hosts < ~/.ssh/known_hosts
-	for i in $( seq 0 $(( ${known_hosts[*]} - 1 )) ); do
+	for i in $( seq 0 $(( ${#known_hosts[*]} - 1 )) ); do
 		if [ "${shost}" = "${known_hosts[${i}]}" ]; then return; fi
 	done
 	echo ${shost} > ~/.ssh/known_hosts
@@ -162,16 +163,16 @@ function ensure-packages-installed {
 	if [ "${barf}" = "true" ]; then exit 1; fi
 }
 
-# verbosity()
+# hammer-verbosity()
 #
 # Outputs the proper verbose and debug flags for Hammer CLI to consume if the
-# ${verbose} environment variable is set to ``true``.
+# ${hammer_verbose} environment variable is set to ``true``.
 #
 # no arguments
 #
-function verbosity {
+function hammer-verbosity {
 	local addl_opts=""
-	if [ ${verbose} == "true" ]; then addl_opts="--verbose --debug"; fi
+	if [ ${hammer_verbose} = "true" ]; then addl_opts="--verbose --debug"; fi
 	echo ${addl_opts}
 }
 
@@ -186,14 +187,49 @@ function verbosity {
 #
 function perfhammer {
 	local hammer_args=$@
-
-	benchmark \
-		hammer $( verbosity ) \
+	local command_line="benchmark \
+		hammer $( hammer-verbosity ) \
 		--username ${username} \
 		--password ${password} \
 		--server https://${server} \
 		--config ${perfhammerdir}/hammer-cfg \
-		${hammer_args}
+		${hammer_args}"
+
+	if [ ${verbose} = "false" ]; then echo ${command_line}; fi
+	${command_line}
+}
+
+# display-environment()
+#
+# This is a helper function that outputs all of perfhammer's current variable
+# values to the user just incase those would like to be logged also during a
+# perfhammer run.
+#
+# no arguments
+#
+function display-environment {
+	local var
+	local -a vars=(
+		scale
+		verbose
+		hammer_verbose
+		record_name
+		recordsdir
+		server
+		username
+		password
+		organization_count
+		lifecycle_environment_count
+		content_view_count
+		product_count
+		activation_key_count
+		repo_count
+		host_count
+	)
+
+	for var in ${vars[*]}; do
+		echo "${var}: ${!var}"
+	done
 }
 
 # organizations()
@@ -300,7 +336,7 @@ function products {
 	unset record_file
 }
 
-# prepare-repos()
+# rando-package-muncher()
 #
 # Creates ${repo_count} number of RPM repositories on the Katello 2.4 server's
 # filesystem specified in ${server}. This stores the names of all created
@@ -308,7 +344,7 @@ function products {
 #
 # no arguments
 #
-function prepare-repos {
+function rando-package-muncher {
 	local i
 	local name
 	local repo_name
@@ -319,15 +355,17 @@ function prepare-repos {
 		repo_urls+=("http://${server}/pub/fakerepos/${name}/")
 	done
 
-	ssh root@${server} <<-END_ROOT_SSH
-		mkdir -p ${pubdir}/fakerepos
+	ssh -tt root@${server} <<-END_ROOT_SSH
 		cd
-		wget https://inecas.fedorapeople.org/fakerepos/zoo3.tar.gz
-		tar xvzf zoo3.tar.gz
+		git clone https://github.com/mccun934/fakerpmrepo-generator
+		cd fakerpmrepo-generator
 		for i in ${repo_names[*]}; do
-			mkdir -p ${pubdir}/fakerepos/\${i}
-			cp -r zoo3/* ${pubdir}/fakerepos/\${i}/
+			./generate-repo.py -n 15 -p 1
+			mkdir -pv ${pubdir}/fakerepos/\${i}
+			mv -v /var/tmp/generated-repo/* ${pubdir}/fakerepos/\${i}/
+			rm -rfv /var/tmp/generated-repo \$HOME/rpmbuild
 		done
+		restorecon -Rv /var/www/html
 		exit
 	END_ROOT_SSH
 }
@@ -428,6 +466,34 @@ function publish-content-views {
 	unset record_file
 }
 
+# activation-keys()
+#
+# Creates ${activation_key_count} number of activation keys on the Katello 2.4
+# server specified in ${server}. This stores the names of the activation keys
+# in ${activation_key_names}.
+#
+# no arguments
+#
+function activation-keys {
+	local name
+	local i
+
+	declare -g record_file="activation_key_create"
+
+	for i in $( seq ${activation_key_count} ); do
+		name="perf-activation-key-${i}"
+		activation_key_names+=("${name}")
+		perfhammer \
+			activation-key create \
+			--organization ${organization_names[0]} \
+			--lifecycle-environment ${lifecycle_environment_names[0]} \
+			--content-view ${content_view_names[0]} \
+			--name ${name}
+	done
+
+	unset record_file
+}
+
 # hosts()
 #
 # Creates ${host_count} number of content hosts on the Katello 2.4 server
@@ -456,6 +522,17 @@ function hosts {
 	unset record_file
 }
 
+# cleanup()
+#
+# This function cleans up any unnecessary bits when perfhammer exits, as
+# desired or otherwise.
+#
+# no arguments
+#
+function cleanup {
+	sed -i /${server}/d $HOME/.ssh/known_hosts
+}
+
 # main()
 #
 # This is the main function that prepares the environment for perfhammer.sh's
@@ -464,28 +541,28 @@ function hosts {
 # no arguments
 #
 function main {
-	set -x
-	set -e
-
 	readonly perfhammerdir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 	readonly pubdir="/var/www/html/pub"
-	readonly recordsdir="${perfhammerdir}/records/$( date +%F_%T )"
 
 	readonly -A defaults=(
 		[organization]=10
 		[lifecycle_environment]=10
 		[content_view]=10
 		[product]=10
+		[activation_key]=10
 		[repo]=10
 		[host]=1000
 	)
 
 	# Scale defaults to 100, as in 100%.
-	declare -g scale username verbose
+	declare -g scale verbose hammer_verbose record_name recordsdir username password server
 	scale=${scale:-100}
-	username=${username:-admin}
 	verbose=${verbose:-false}
+	hammer_verbose=${hammer_verbose:-false}
+	record_name=${record_name:-""}
+	recordsdir="${perfhammerdir}/records/$( date --iso-8601=minutes )${record_name}"
 	if [ -z ${server+x} ]; then read -r -p "katello server hostname: " server; fi
+	username=${username:-admin}
 	if [ -z ${password+x} ]; then read -r -p "katello password: " password; fi
 
 	declare -g organization_names=()
@@ -495,22 +572,27 @@ function main {
 	declare -g repo_names=()
 	declare -g repo_urls=()
 	declare -g host_names=()
+	declare -g activation_key_names=()
+
+	if [ ${verbose} = "true" ]; then set -x; fi
+	set -e
 
 	setup-hammer-configs
 	ensure-ssh-connectivity
 	ensure-rvm-gemset
 	ensure-packages-installed
 	counts
+	display-environment
 	organizations
 	lifecycle-environments
 	content-views
 	products
-	prepare-repos
+	rando-package-muncher
 	repos
 	sync-repos
 	publish-content-views
 	hosts
 }
 
-# big green "GO" button!
+trap cleanup EXIT
 main
