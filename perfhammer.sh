@@ -210,6 +210,7 @@ function perfhammer {
 function display-environment {
 	local var
 	local -a vars=(
+		manifest
 		scale
 		verbose
 		hammer_verbose
@@ -255,6 +256,28 @@ function organizations {
 	done
 
 	unset record_file
+}
+
+# import-manifest()
+#
+# Imports a manifest found in the current directory into the Katello 2.4 server
+# specified in ${server}. If no manifest is found, this function exits and
+# prevents any other RH product related functions from running because they
+# would depend on a manifest existing in the Katello server.
+#
+# no arguments
+#
+function import-manifest {
+	if [ -r "${manifest}" ]; then
+		declare -g manifest_operations="true"
+	else
+		declare -g manifest_operations="false"
+	fi
+
+	perfhammer \
+		subscription upload \
+		--organization ${organization_names[0]} \
+		--file ${manifest}
 }
 
 # lifecycle-environments()
@@ -515,11 +538,52 @@ function hosts {
 			content-host create \
 			--organization ${organization_names[0]} \
 			--content-view ${content_view_names[0]} \
-			--name ${name} \
+			--name ${name}
 		# is this right?!
 	done
 
 	unset record_file
+}
+
+# redhat-repos()
+#
+# Enable some Red Hat repos on the Katello 2.4 server specified in ${server}.
+#
+# no arguments
+#
+function redhat-repos {
+	local -a repo_sets=(
+		[0]="Red Hat Enterprise Linux 6 Server (RPMs)"
+		[1]="Red Hat Enterprise Linux 6 Server - Extras (RPMs)"
+		[2]="Red Hat Enterprise Linux 6 Server - Fastrack (RPMs)"
+		[3]="Red Hat Enterprise Linux 6 Server - Optional (RPMs)"
+		[4]="Red Hat Enterprise Linux 6 Server - Optional Fastrack (RPMs)"
+		[5]="Red Hat Enterprise Linux 6 Server - RH Common (RPMs)"
+		[6]="Red Hat Enterprise Linux 6 Server - Supplementary (RPMs)"
+		[7]="Red Hat Enterprise Linux 6 Server (ISOs)"
+		[8]="Red Hat Enterprise Linux 6 Server - Supplementary (ISOs)"
+		[9]="Red Hat Enterprise Linux 7 Server (RPMs)"
+		[10]="Red Hat Enterprise Linux 7 Server - Extras (RPMs)"
+		[11]="Red Hat Enterprise Linux 7 Server - Fastrack (RPMs)"
+		[12]="Red Hat Enterprise Linux 7 Server - Optional (RPMs)"
+		[13]="Red Hat Enterprise Linux 7 Server - Optional Fastrack (RPMs)"
+		[14]="Red Hat Enterprise Linux 7 Server - RH Common (RPMs)"
+		[15]="Red Hat Enterprise Linux 7 Server - Supplementary (RPMs)"
+	)
+	local repo_set
+	local i
+
+	if [ "${manifest_operations}" = "false" ]; then return; fi
+
+	for i in $( seq 0 $(( ${#repo_sets[*]} - 1 )) ); do
+		perfhammer \
+			repository-set enable \
+			--organization perf-org-1 \
+			--product '"'Red Hat Enterprise Linux Server'"' \
+			--name '"'${repo_sets[${i}]}'"' \
+			--releasever 6Server \
+			--basearch x86_64
+	done
 }
 
 # cleanup()
@@ -543,6 +607,7 @@ function cleanup {
 function main {
 	readonly perfhammerdir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 	readonly pubdir="/var/www/html/pub"
+	readonly manifest="${perfhammerdir}/manifest.zip"
 
 	readonly -A defaults=(
 		[organization]=10
@@ -574,6 +639,8 @@ function main {
 	declare -g host_names=()
 	declare -g activation_key_names=()
 
+	declare -g rh_product="Red Hat Enterprise Linux Server"
+
 	if [ ${verbose} = "true" ]; then set -x; fi
 	set -e
 
@@ -584,6 +651,7 @@ function main {
 	counts
 	display-environment
 	organizations
+	import-manifest
 	lifecycle-environments
 	content-views
 	products
@@ -592,6 +660,7 @@ function main {
 	sync-repos
 	publish-content-views
 	hosts
+	redhat-repos
 }
 
 trap cleanup EXIT
