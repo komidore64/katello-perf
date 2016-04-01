@@ -29,7 +29,6 @@ function scale {
 # *command_line - Command line string to be executed in Bash.
 #
 function benchmark {
-	local command_line=$@
 	local file="${recordsdir}/${record_file:-perfhammer}.csv"
 
 	if [ ! -w "${file}" ]; then
@@ -42,7 +41,7 @@ function benchmark {
 		--append \
 		--format "%E,%C" \
 		-- \
-		${command_line}
+		"$@"
 }
 
 # counts()
@@ -196,7 +195,7 @@ function perfhammer {
 		${hammer_args}"
 
 	if [ ${verbose} = "false" ]; then echo ${command_line}; fi
-	${command_line}
+	eval "$command_line"
 }
 
 # display-environment()
@@ -553,22 +552,22 @@ function hosts {
 #
 function redhat-repos {
 	local -a repo_sets=(
-		[0]="Red Hat Enterprise Linux 6 Server (RPMs)"
-		[1]="Red Hat Enterprise Linux 6 Server - Extras (RPMs)"
-		[2]="Red Hat Enterprise Linux 6 Server - Fastrack (RPMs)"
-		[3]="Red Hat Enterprise Linux 6 Server - Optional (RPMs)"
-		[4]="Red Hat Enterprise Linux 6 Server - Optional Fastrack (RPMs)"
-		[5]="Red Hat Enterprise Linux 6 Server - RH Common (RPMs)"
-		[6]="Red Hat Enterprise Linux 6 Server - Supplementary (RPMs)"
-		[7]="Red Hat Enterprise Linux 6 Server (ISOs)"
-		[8]="Red Hat Enterprise Linux 6 Server - Supplementary (ISOs)"
-		[9]="Red Hat Enterprise Linux 7 Server (RPMs)"
-		[10]="Red Hat Enterprise Linux 7 Server - Extras (RPMs)"
-		[11]="Red Hat Enterprise Linux 7 Server - Fastrack (RPMs)"
-		[12]="Red Hat Enterprise Linux 7 Server - Optional (RPMs)"
-		[13]="Red Hat Enterprise Linux 7 Server - Optional Fastrack (RPMs)"
-		[14]="Red Hat Enterprise Linux 7 Server - RH Common (RPMs)"
-		[15]="Red Hat Enterprise Linux 7 Server - Supplementary (RPMs)"
+		[0]='"Red Hat Enterprise Linux 6 Server (RPMs)"'
+		[1]='"Red Hat Enterprise Linux 6 Server - Extras (RPMs)"'
+		[2]='"Red Hat Enterprise Linux 6 Server - Fastrack (RPMs)"'
+		[3]='"Red Hat Enterprise Linux 6 Server - Optional (RPMs)"'
+		[4]='"Red Hat Enterprise Linux 6 Server - Optional Fastrack (RPMs)"'
+		[5]='"Red Hat Enterprise Linux 6 Server - RH Common (RPMs)"'
+		[6]='"Red Hat Enterprise Linux 6 Server - Supplementary (RPMs)"'
+		[7]='"Red Hat Enterprise Linux 6 Server (ISOs)"'
+		[8]='"Red Hat Enterprise Linux 6 Server - Supplementary (ISOs)"'
+		[9]='"Red Hat Enterprise Linux 7 Server (RPMs)"'
+		[10]='"Red Hat Enterprise Linux 7 Server - Extras (RPMs)"'
+		[11]='"Red Hat Enterprise Linux 7 Server - Fastrack (RPMs)"'
+		[12]='"Red Hat Enterprise Linux 7 Server - Optional (RPMs)"'
+		[13]='"Red Hat Enterprise Linux 7 Server - Optional Fastrack (RPMs)"'
+		[14]='"Red Hat Enterprise Linux 7 Server - RH Common (RPMs)"'
+		[15]='"Red Hat Enterprise Linux 7 Server - Supplementary (RPMs)"'
 	)
 	local repo_set
 	local i
@@ -580,7 +579,7 @@ function redhat-repos {
 			repository-set enable \
 			--organization perf-org-1 \
 			--product '"'Red Hat Enterprise Linux Server'"' \
-			--name '"'${repo_sets[${i}]}'"' \
+			--name ${repo_sets[${i}]} \
 			--releasever 6Server \
 			--basearch x86_64
 	done
