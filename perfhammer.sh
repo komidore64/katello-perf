@@ -551,38 +551,48 @@ function hosts {
 # no arguments
 #
 function redhat-repos {
-	local -a repo_sets=(
+	local -a el6_repo_sets=(
 		[0]='"Red Hat Enterprise Linux 6 Server (RPMs)"'
-		[1]='"Red Hat Enterprise Linux 6 Server - Extras (RPMs)"'
-		[2]='"Red Hat Enterprise Linux 6 Server - Fastrack (RPMs)"'
-		[3]='"Red Hat Enterprise Linux 6 Server - Optional (RPMs)"'
-		[4]='"Red Hat Enterprise Linux 6 Server - Optional Fastrack (RPMs)"'
-		[5]='"Red Hat Enterprise Linux 6 Server - RH Common (RPMs)"'
-		[6]='"Red Hat Enterprise Linux 6 Server - Supplementary (RPMs)"'
-		[7]='"Red Hat Enterprise Linux 6 Server (ISOs)"'
-		[8]='"Red Hat Enterprise Linux 6 Server - Supplementary (ISOs)"'
-		[9]='"Red Hat Enterprise Linux 7 Server (RPMs)"'
-		[10]='"Red Hat Enterprise Linux 7 Server - Extras (RPMs)"'
-		[11]='"Red Hat Enterprise Linux 7 Server - Fastrack (RPMs)"'
-		[12]='"Red Hat Enterprise Linux 7 Server - Optional (RPMs)"'
-		[13]='"Red Hat Enterprise Linux 7 Server - Optional Fastrack (RPMs)"'
-		[14]='"Red Hat Enterprise Linux 7 Server - RH Common (RPMs)"'
-		[15]='"Red Hat Enterprise Linux 7 Server - Supplementary (RPMs)"'
+		[1]='"Red Hat Enterprise Linux 6 Server - Optional (RPMs)"'
+		[2]='"Red Hat Enterprise Linux 6 Server - RH Common (RPMs)"'
+		[3]='"Red Hat Enterprise Linux 6 Server - Supplementary (RPMs)"'
 	)
+
+	local -a el7_repo_sets=(
+		[0]='"Red Hat Enterprise Linux 7 Server (RPMs)"'
+		[1]='"Red Hat Enterprise Linux 7 Server - Optional (RPMs)"'
+		[2]='"Red Hat Enterprise Linux 7 Server - RH Common (RPMs)"'
+		[3]='"Red Hat Enterprise Linux 7 Server - Supplementary (RPMs)"'
+	)
+
 	local repo_set
 	local i
 
 	if [ "${manifest_operations}" = "false" ]; then return; fi
 
-	for i in $( seq 0 $(( ${#repo_sets[*]} - 1 )) ); do
+	declare -g record_file="redhat_repo_enable"
+
+	for i in $( seq 0 $(( ${#el6_repo_sets[*]} - 1 )) ); do
 		perfhammer \
 			repository-set enable \
 			--organization perf-org-1 \
 			--product '"'Red Hat Enterprise Linux Server'"' \
-			--name ${repo_sets[${i}]} \
+			--name ${el6_repo_sets[${i}]} \
 			--releasever 6Server \
 			--basearch x86_64
 	done
+
+	for i in $( seq 0 $(( ${#el7_repo_sets[*]} - 1 )) ); do
+		perfhammer \
+			repository-set enable \
+			--organization perf-org-1 \
+			--product '"'Red Hat Enterprise Linux Server'"' \
+			--name ${el7_repo_sets[${i}]} \
+			--releasever 7Server \
+			--basearch x86_64
+	done
+
+	unset record_file
 }
 
 # cleanup()
