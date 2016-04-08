@@ -175,6 +175,19 @@ function hammer-verbosity {
 	echo ${addl_opts}
 }
 
+# hammer-async()
+#
+# Outputs the proper asynchronous flag for Hammer CLI to consume if the
+# ${hammer_async} environment variable is set to ``true``.
+#
+# no arguments
+#
+function hammer-async {
+	local addl_opts=""
+	if [ ${hammer_async} = "true" ]; then addl_opts="--async"; fi
+	echo ${addl_opts}
+}
+
 # perfhammer( *hammer_args )
 #
 # A wrapper for Hammer CLI to be called from perfhammer.sh. This adds the proper
@@ -212,8 +225,9 @@ function display-environment {
 		manifest
 		scale
 		verbose
+		bulldoze
 		hammer_verbose
-		record_name
+		hammer_async
 		recordsdir
 		server
 		username
@@ -446,7 +460,8 @@ function sync-repos {
 				repository synchronize \
 				--organization ${organization_names[0]} \
 				--product ${product} \
-				--name ${repo_name}
+				--name ${repo_name} \
+				$( hammer-async )
 		done
 	done
 
@@ -482,7 +497,8 @@ function publish-content-views {
 		perfhammer \
 			content-view publish \
 			--organization ${organization_names[0]} \
-			--name ${view}
+			--name ${view} \
+			$( hammer-async )
 	done
 
 	unset record_file
@@ -544,13 +560,13 @@ function hosts {
 	unset record_file
 }
 
-# redhat-repos()
+# enable-redhat-repos()
 #
 # Enable some Red Hat repos on the Katello 2.4 server specified in ${server}.
 #
 # no arguments
 #
-function redhat-repos {
+function enable-redhat-repos {
 	local -a el6_repo_sets=(
 		[0]='"Red Hat Enterprise Linux 6 Server (RPMs)"'
 		[1]='"Red Hat Enterprise Linux 6 Server - Optional (RPMs)"'
@@ -565,7 +581,6 @@ function redhat-repos {
 		[3]='"Red Hat Enterprise Linux 7 Server - Supplementary (RPMs)"'
 	)
 
-	local repo_set
 	local i
 
 	if [ "${manifest_operations}" = "false" ]; then return; fi
@@ -590,6 +605,43 @@ function redhat-repos {
 			--name ${el7_repo_sets[${i}]} \
 			--releasever 7Server \
 			--basearch x86_64
+	done
+
+	unset record_file
+}
+
+# sync-redhat-repos()
+#
+# Sync some Red Hat repos that have been enabled on the Katello 2.4 server
+# specified in ${server}.
+#
+# no arguments
+#
+function sync-redhat-repos {
+	local -a redhat_repos=(
+		[0]='"Red Hat Enterprise Linux 6 Server RPMs x86_64 6Server"'
+		[1]='"Red Hat Enterprise Linux 6 Server - Optional RPMs x86_64 6Server"'
+		[2]='"Red Hat Enterprise Linux 6 Server - RH Common RPMs x86_64 6Server"'
+		[3]='"Red Hat Enterprise Linux 6 Server - Supplementary RPMs x86_64 6Server"'
+		[4]='"Red Hat Enterprise Linux 7 Server RPMs x86_64 7Server"'
+		[5]='"Red Hat Enterprise Linux 7 Server - Optional RPMs x86_64 7Server"'
+		[6]='"Red Hat Enterprise Linux 7 Server - RH Common RPMs x86_64 7Server"'
+		[7]='"Red Hat Enterprise Linux 7 Server - Supplementary RPMs x86_64 7Server"'
+	)
+
+	local i
+
+	if [ "${manifest_operations}" = "false" ]; then return; fi
+
+	declare -g record_file="redhat_repo_sync"
+
+	for i in $( seq 0 $(( ${#redhat_repos[*]} - 1 )) ); do
+		perfhammer \
+			repository synchronize \
+			--organization perf-org-1 \
+			--product '"'Red Hat Enterprise Linux Server'"' \
+			--name ${redhat_repos[${i}]} \
+			$( hammer-async )
 	done
 
 	unset record_file
@@ -630,9 +682,11 @@ function main {
 
 	# Scale defaults to 100, as in 100%.
 	declare -g scale verbose hammer_verbose record_name recordsdir username password server
+	bulldoze=${bulldoze:-false}
 	scale=${scale:-100}
 	verbose=${verbose:-false}
 	hammer_verbose=${hammer_verbose:-false}
+	hammer_async=${hammer_async:-false}
 	record_name=${record_name:-""}
 	recordsdir="${perfhammerdir}/records/$( date --iso-8601=minutes )${record_name}"
 	if [ -z ${server+x} ]; then read -r -p "katello server hostname: " server; fi
@@ -651,7 +705,7 @@ function main {
 	declare -g rh_product="Red Hat Enterprise Linux Server"
 
 	if [ ${verbose} = "true" ]; then set -x; fi
-	set -e
+	if [ ${bulldoze} = "false" ]; then set -e; fi
 
 	setup-hammer-configs
 	ensure-ssh-connectivity
@@ -669,7 +723,8 @@ function main {
 	sync-repos
 	publish-content-views
 	hosts
-	redhat-repos
+	enable-redhat-repos
+	sync-redhat-repos
 }
 
 trap cleanup EXIT
