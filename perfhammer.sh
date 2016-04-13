@@ -117,28 +117,6 @@ function ensure-ssh-connectivity {
 	echo ${shost} > ~/.ssh/known_hosts
 }
 
-# ensure-rvm-gemset()
-#
-# Ensures that this script's environment is running under a proper RVM gemset
-# that has the correct version of hammer-cli-katello installed for communicating
-# with a Katello 2.4 server.
-#
-# no arguments
-#
-function ensure-rvm-gemset {
-	if ! which rvm &>/dev/null; then
-		echo "Y U NO USE RVM?"
-		exit 1
-	fi
-	if [ "$( rvm current )" != "ruby-2.2.1@katello-perf" ]; then
-		rvm_is_not_a_shell_function=0 rvm use ruby-2.2.1@katello-perf
-	fi
-
-	if ! gem contents hammer_cli_katello &>/dev/null; then
-		gem install hammer_cli_katello --version 0.0.19
-	fi
-}
-
 # ensure-packages-installed()
 #
 # Make sure that bc and GNU time are installed before running perfhammer.sh.
@@ -554,7 +532,7 @@ function hosts {
 			--organization ${organization_names[0]} \
 			--content-view ${content_view_names[0]} \
 			--name ${name}
-		# is this right?!
+		# TODO: make this work with katello3.0
 	done
 
 	unset record_file
@@ -709,7 +687,6 @@ function main {
 
 	setup-hammer-configs
 	ensure-ssh-connectivity
-	ensure-rvm-gemset
 	ensure-packages-installed
 	counts
 	display-environment
@@ -718,7 +695,7 @@ function main {
 	lifecycle-environments
 	content-views
 	products
-	rando-package-muncher
+	if [ ${bulldoze} = "false" ]; then rando-package-muncher; fi
 	repos
 	sync-repos
 	publish-content-views

@@ -1,5 +1,11 @@
 # katello-perf
 
-`create-katello-os1.sh` is designed to get you up and running on an openstack instance quickly for katello performance testing, though it has already been abandoned in favor of beaker.
+`perfhammer` uses hammer-cli to populate a katello machine with lots of data for perfomance testing.
 
-`perfhammer` uses hammer-cli to populate a katello 2.4 machine with lots of data fore perfomance testing.
+## proper versions of hammer-cli-katello
+
+| katello version | hammer-cli-katello version |
+| --------------- | -------------------------- |
+| 2.4             | 0.0.19                     |
+| 3.0             | 0.0.24                     |
+| master          | master                     |
