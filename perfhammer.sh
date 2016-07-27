@@ -36,12 +36,7 @@ function benchmark {
 		echo "elapsedtime [HH:]MM:SS,command" > "${file}"
 	fi
 
-	/usr/bin/time \
-		--output ${file} \
-		--append \
-		--format "%E,%C" \
-		-- \
-		"$@"
+	/usr/bin/time --output ${file} --append --format "%E,%C" -- "$@"
 }
 
 # counts()
@@ -177,13 +172,7 @@ function hammer-async {
 #
 function perfhammer {
 	local hammer_args=$@
-	local command_line="benchmark \
-		hammer $( hammer-verbosity ) \
-		--username ${username} \
-		--password ${password} \
-		--server https://${server} \
-		--config ${perfhammerdir}/hammer-cfg \
-		${hammer_args}"
+	local command_line="benchmark hammer $( hammer-verbosity ) --username ${username} --password ${password} --server https://${server} --config ${perfhammerdir}/hammer-cfg ${hammer_args}"
 
 	if [ ${verbose} = "false" ]; then echo ${command_line}; fi
 	eval "$command_line"
@@ -241,9 +230,7 @@ function organizations {
 	for i in $( seq 1 ${organization_count} ); do
 		name="perf-org-${i}"
 		organization_names+=("${name}")
-		perfhammer \
-			organization create \
-			--name ${name}
+		perfhammer organization create --name ${name}
 	done
 
 	unset record_file
@@ -263,12 +250,10 @@ function import-manifest {
 		declare -g manifest_operations="true"
 	else
 		declare -g manifest_operations="false"
+		return
 	fi
 
-	perfhammer \
-		subscription upload \
-		--organization ${organization_names[0]} \
-		--file ${manifest}
+	perfhammer subscription upload --organization ${organization_names[0]} --file ${manifest}
 }
 
 # lifecycle-environments()
@@ -288,11 +273,7 @@ function lifecycle-environments {
 	for i in $( seq 1 ${lifecycle_environment_count} ); do
 		name="perf-lifecycle-env-${i}"
 		lifecycle_environment_names+=("${name}")
-		perfhammer \
-			lifecycle-environment create \
-			--organization ${organization_names[0]} \
-			--name ${name} \
-			--prior Library
+		perfhammer lifecycle-environment create --organization ${organization_names[0]} --name ${name} --prior Library
 	done
 
 	unset record_file
@@ -315,10 +296,7 @@ function content-views {
 	for i in $( seq 1 ${content_view_count} ); do
 		name="perf-content-view-${i}"
 		content_view_names+=("${name}")
-		perfhammer \
-			content-view create \
-			--organization ${organization_names[0]} \
-			--name ${name}
+		perfhammer content-view create --organization ${organization_names[0]} --name ${name}
 	done
 
 	unset record_file
@@ -341,10 +319,7 @@ function products {
 	for i in $( seq 1 ${product_count} ); do
 		name="perf-product-${i}"
 		product_names+=("${name}")
-		perfhammer \
-			product create \
-			--organization ${organization_names[0]} \
-			--name ${name}
+		perfhammer product create --organization ${organization_names[0]} --name ${name}
 	done
 
 	unset record_file
@@ -403,14 +378,7 @@ function repos {
 		for i in $( seq 0 $(( ${#repo_names[*]} - 1 )) ); do
 			name="${repo_names[${i}]}"
 			url="${repo_urls[${i}]}"
-			perfhammer \
-				repository create \
-				--organization ${organization_names[0]} \
-				--product ${product} \
-				--name ${name} \
-				--url ${url} \
-				--content-type yum \
-				--publish-via-http true
+			perfhammer repository create --organization ${organization_names[0]} --product ${product} --name ${name} --url ${url} --content-type yum --publish-via-http true
 		done
 	done
 
@@ -434,12 +402,7 @@ function sync-repos {
 	for product in ${product_names[*]}; do
 		for i in $( seq 0 $(( ${#repo_names[*]} - 1 )) ); do
 			repo_name="${repo_names[${i}]}"
-			perfhammer \
-				repository synchronize \
-				--organization ${organization_names[0]} \
-				--product ${product} \
-				--name ${repo_name} \
-				$( hammer-async )
+			perfhammer repository synchronize --organization ${organization_names[0]} --product ${product} --name ${repo_name} $( hammer-async )
 		done
 	done
 
@@ -462,21 +425,12 @@ function publish-content-views {
 		for product in ${product_names[*]}; do
 			for repo in ${repo_names[*]}; do
 				declare -g record_file="content_view_add_repository"
-				perfhammer \
-					content-view add-repository \
-					--organization ${organization_names[0]} \
-					--product ${product} \
-					--repository ${repo} \
-					--name ${view}
+				perfhammer content-view add-repository --organization ${organization_names[0]} --product ${product} --repository ${repo} --name ${view}
 			done
 		done
 
 		declare -g record_file="content_view_publish"
-		perfhammer \
-			content-view publish \
-			--organization ${organization_names[0]} \
-			--name ${view} \
-			$( hammer-async )
+		perfhammer content-view publish --organization ${organization_names[0]} --name ${view} $( hammer-async )
 	done
 
 	unset record_file
@@ -499,12 +453,7 @@ function activation-keys {
 	for i in $( seq ${activation_key_count} ); do
 		name="perf-activation-key-${i}"
 		activation_key_names+=("${name}")
-		perfhammer \
-			activation-key create \
-			--organization ${organization_names[0]} \
-			--lifecycle-environment ${lifecycle_environment_names[0]} \
-			--content-view ${content_view_names[0]} \
-			--name ${name}
+		perfhammer activation-key create --organization ${organization_names[0]} --lifecycle-environment ${lifecycle_environment_names[0]} --content-view ${content_view_names[0]} --name ${name}
 	done
 
 	unset record_file
@@ -527,11 +476,7 @@ function hosts {
 	for i in $( seq 1 ${host_count} ); do
 		name="perf-host-${i}"
 		host_names+=("${name}")
-		perfhammer \
-			content-host create \
-			--organization ${organization_names[0]} \
-			--content-view ${content_view_names[0]} \
-			--name ${name}
+		perfhammer content-host create --organization ${organization_names[0]} --content-view ${content_view_names[0]} --name ${name}
 		# TODO: make this work with katello3.0
 	done
 
@@ -566,23 +511,11 @@ function enable-redhat-repos {
 	declare -g record_file="redhat_repo_enable"
 
 	for i in $( seq 0 $(( ${#el6_repo_sets[*]} - 1 )) ); do
-		perfhammer \
-			repository-set enable \
-			--organization perf-org-1 \
-			--product '"'Red Hat Enterprise Linux Server'"' \
-			--name ${el6_repo_sets[${i}]} \
-			--releasever 6Server \
-			--basearch x86_64
+		perfhammer repository-set enable --organization perf-org-1 --product '"'Red Hat Enterprise Linux Server'"' --name ${el6_repo_sets[${i}]} --releasever 6Server --basearch x86_64
 	done
 
 	for i in $( seq 0 $(( ${#el7_repo_sets[*]} - 1 )) ); do
-		perfhammer \
-			repository-set enable \
-			--organization perf-org-1 \
-			--product '"'Red Hat Enterprise Linux Server'"' \
-			--name ${el7_repo_sets[${i}]} \
-			--releasever 7Server \
-			--basearch x86_64
+		perfhammer repository-set enable --organization perf-org-1 --product '"'Red Hat Enterprise Linux Server'"' --name ${el7_repo_sets[${i}]} --releasever 7Server --basearch x86_64
 	done
 
 	unset record_file
@@ -614,12 +547,7 @@ function sync-redhat-repos {
 	declare -g record_file="redhat_repo_sync"
 
 	for i in $( seq 0 $(( ${#redhat_repos[*]} - 1 )) ); do
-		perfhammer \
-			repository synchronize \
-			--organization perf-org-1 \
-			--product '"'Red Hat Enterprise Linux Server'"' \
-			--name ${redhat_repos[${i}]} \
-			$( hammer-async )
+		perfhammer repository synchronize --organization perf-org-1 --product '"'Red Hat Enterprise Linux Server'"' --name ${redhat_repos[${i}]} $( hammer-async )
 	done
 
 	unset record_file
