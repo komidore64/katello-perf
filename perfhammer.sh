@@ -247,8 +247,10 @@ function organizations {
 #
 function import-manifest {
 	if [ -r "${manifest}" ]; then
+		echo "manifest found"
 		declare -g manifest_operations="true"
 	else
+		echo "no manifest found - skipping manifest import"
 		declare -g manifest_operations="false"
 		return
 	fi
@@ -506,7 +508,10 @@ function enable-redhat-repos {
 
 	local i
 
-	if [ "${manifest_operations}" = "false" ]; then return; fi
+	if [ "${manifest_operations}" = "false" ]; then
+		echo "no manifest found - skipping redhat repo enablement"
+		return
+	fi
 
 	declare -g record_file="redhat_repo_enable"
 
@@ -542,7 +547,10 @@ function sync-redhat-repos {
 
 	local i
 
-	if [ "${manifest_operations}" = "false" ]; then return; fi
+	if [ "${manifest_operations}" = "false" ]; then
+		echo "no manifest found - skipping redhat repo sync"
+		return
+	fi
 
 	declare -g record_file="redhat_repo_sync"
 
