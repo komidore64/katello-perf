@@ -270,12 +270,14 @@ function lifecycle-environments {
 	local i
 	local name
 
+	local library_id=$( perfhammer --output csv lifecycle-environment info --organization ${organization_names[0]} --name Library | grep -v ID | cut -d, -f1 )
+
 	declare -g record_file="lifecycle_environment_create"
 
 	for i in $( seq 1 ${lifecycle_environment_count} ); do
 		name="perf-lifecycle-env-${i}"
 		lifecycle_environment_names+=("${name}")
-		perfhammer lifecycle-environment create --organization ${organization_names[0]} --name ${name} --prior Library
+		perfhammer lifecycle-environment create --organization ${organization_names[0]} --name ${name} --prior-id ${library_id}
 	done
 
 	unset record_file
@@ -472,14 +474,17 @@ function activation-keys {
 function hosts {
 	local i
 	local name
+	local host_create_json
+
+	local org_id=$( perfhammer --output csv organization info --name ${organization_names[0]} | grep -v Id | cut -d, -f1 )
 
 	declare -g record_file="host_create"
 
-	for i in $( seq 1 ${host_count} ); do
-		name="perf-host-${i}"
+	for i in $( seq ${host_count} ); do
+		name="perf-content-host-${i}"
 		host_names+=("${name}")
-		perfhammer content-host create --organization ${organization_names[0]} --content-view ${content_view_names[0]} --name ${name}
-		# TODO: make this work with katello3.0
+		host_create_json='{ "system": { "name": "'${name}'", "organization_id": '${org_id}', "type": "system", "facts": { "system.certificate_version": "3.2", "network.hostname": "'${name}'", "cpu.core(s)_per_socket": 4, "memory.memtotal": "8GB", "uname.machine": "x86_64", "distribution.name": "RHEL", "distribution.version": "6.4", "virt.is_guest": false, "cpu.cpu(s)": 1 } } }'
+		curl -k -u admin:${password} -H "Content-Type: application/json" -X POST -d @<( echo ${host_create_json} ) "https://${server}/katello/api/systems"
 	done
 
 	unset record_file
