@@ -477,14 +477,17 @@ function hosts {
 	local host_create_json
 
 	local org_id=$( perfhammer --output csv organization info --name ${organization_names[0]} | grep -v Id | cut -d, -f1 )
+	local lfc_id=$( perfhammer --output csv lifecycle-environment info --organization-id ${org_id} --name Library | grep -v ID | cut -d, -f1 )
+	local cv_id=$( perfhammer --output csv content-view info --organization-id ${org_id} --name '"Default Organization View"' | grep -v ID | cut -d, -f1 )
 
 	declare -g record_file="host_create"
 
 	for i in $( seq ${host_count} ); do
+
 		name="perf-content-host-${i}"
 		host_names+=("${name}")
-		host_create_json='{ "system": { "name": "'${name}'", "organization_id": '${org_id}', "type": "system", "facts": { "system.certificate_version": "3.2", "network.hostname": "'${name}'", "cpu.core(s)_per_socket": 4, "memory.memtotal": "8GB", "uname.machine": "x86_64", "distribution.name": "RHEL", "distribution.version": "6.4", "virt.is_guest": false, "cpu.cpu(s)": 1 } } }'
-		curl -k -u admin:${password} -H "Content-Type: application/json" -X POST -d @<( echo ${host_create_json} ) "https://${server}/katello/api/systems"
+		host_create_json='{ "name": "'${name}'", "organization_id": '${org_id}', "lifecycle_environment_id": '${lfc_id}', "content_view_id": '${cv_id}', "type": "system", "facts": { "system.certificate_version": "3.2", "network.hostname": "'${name}'", "cpu.core(s)_per_socket": 4, "memory.memtotal": "8GB", "uname.machine": "x86_64", "distribution.name": "RHEL", "distribution.version": "6.4", "virt.is_guest": false, "cpu.cpu(s)": 1 } }'
+		curl -k -u admin:${password} -H "Content-Type: application/json" -X POST -d @<( echo ${host_create_json} ) "https://${server}/api/hosts/subscriptions"
 	done
 
 	unset record_file
